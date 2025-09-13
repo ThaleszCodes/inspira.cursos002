@@ -281,11 +281,19 @@ export const api = {
         return [];
     },
 
+    // Fix: Safely handle `completed_lesson_ids`, which Supabase may return as `unknown[]` or null.
+    // This ensures we're working with a Set of strings, preventing type errors.
     toggleLessonCompletion: async (userId: string, courseId: string, lessonId: string): Promise<string[]> => {
         const { data: enrollment, error: fetchError } = await supabase.from('enrollments').select('completed_lesson_ids').eq('user_id', userId).eq('course_id', courseId).single();
         if (fetchError) throw fetchError;
 
-        const completedIds = new Set(enrollment.completed_lesson_ids || []);
+        const currentIds = enrollment?.completed_lesson_ids;
+        const completedIds = new Set(
+            Array.isArray(currentIds)
+                ? currentIds.filter((item): item is string => typeof item === 'string')
+                : []
+        );
+
         if (completedIds.has(lessonId)) {
             completedIds.delete(lessonId);
         } else {

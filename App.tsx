@@ -24,26 +24,6 @@ const App: React.FC = () => {
   const [enrolledCourseIds, setEnrolledCourseIds] = useState<Set<string>>(new Set());
   const [courseCompletionData, setCourseCompletionData] = useState<{ course: Course; performance: number } | null>(null);
 
-  useEffect(() => {
-    const checkSession = async () => {
-      setIsLoading(true);
-      const user = await api.getSession();
-      await handleLogin(user);
-      setIsLoading(false);
-    };
-
-    checkSession();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        const user = session?.user ? await api.getSession() : null;
-        await handleLogin(user);
-    });
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
-  }, []);
-
   const fetchCoursesAndEnrollments = useCallback(async (user: User | null) => {
     try {
       const allCourses = await api.getCourses();
@@ -63,7 +43,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleLogin = async (user: User | null) => {
+  const handleLogin = useCallback(async (user: User | null) => {
     setCurrentUser(user);
     await fetchCoursesAndEnrollments(user);
 
@@ -72,7 +52,21 @@ const App: React.FC = () => {
     } else {
       setView('HOME');
     }
-  };
+  }, [fetchCoursesAndEnrollments]);
+
+  useEffect(() => {
+    // Rely solely on onAuthStateChange. It fires immediately with the initial session.
+    // This prevents race conditions between a manual getSession and the listener.
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        const user = session?.user ? await api.getSession() : null;
+        await handleLogin(user);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [handleLogin]);
+
 
   const handleLogout = async () => {
     await api.logout();
